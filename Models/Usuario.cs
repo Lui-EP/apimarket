@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace AgroMarketApi.Models;
 
@@ -18,6 +19,7 @@ public class Usuario
     [Column("activo")] public bool Activo { get; set; } = true;
     [Column("fecha_registro")] public DateTime? FechaRegistro { get; set; }
     [Column("ultima_conexion")] public DateTime? UltimaConexion { get; set; }
-
+    
+    [JsonIgnore]     // 👈 evita Usuario.Productos -> Producto.Productor -> Usuario...
     public ICollection<Producto> Productos { get; set; } = new List<Producto>();
 }

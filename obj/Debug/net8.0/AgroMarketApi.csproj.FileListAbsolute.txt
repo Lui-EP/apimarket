@@ -90,6 +90,7 @@ C:\Users\luisa\OneDrive\Documents\PAG_AGRICOLA\AgroMarketApi\AgroMarketApi\obj\D
 C:\Users\luisa\OneDrive\Documents\PAG_AGRICOLA\AgroMarketApi\AgroMarketApi\obj\Debug\net8.0\AgroMarketApi.csproj.CoreCompileInputs.cache
 C:\Users\luisa\OneDrive\Documents\PAG_AGRICOLA\AgroMarketApi\AgroMarketApi\obj\Debug\net8.0\AgroMarketApi.MvcApplicationPartsAssemblyInfo.cs
 C:\Users\luisa\OneDrive\Documents\PAG_AGRICOLA\AgroMarketApi\AgroMarketApi\obj\Debug\net8.0\AgroMarketApi.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\luisa\OneDrive\Documents\PAG_AGRICOLA\AgroMarketApi\AgroMarketApi\obj\Debug\net8.0\AgroMarketApi.sourcelink.json
 C:\Users\luisa\OneDrive\Documents\PAG_AGRICOLA\AgroMarketApi\AgroMarketApi\obj\Debug\net8.0\rjimswa.dswa.cache.json
 C:\Users\luisa\OneDrive\Documents\PAG_AGRICOLA\AgroMarketApi\AgroMarketApi\obj\Debug\net8.0\rjsmrazor.dswa.cache.json
 C:\Users\luisa\OneDrive\Documents\PAG_AGRICOLA\AgroMarketApi\AgroMarketApi\obj\Debug\net8.0\rjsmcshtml.dswa.cache.json
