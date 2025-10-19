@@ -2,22 +2,20 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /source
 
-# Cachea restore
+# Restaurar el PROYECTO (no la solución)
 COPY AgroMarketApi.csproj ./
-RUN dotnet restore
+RUN dotnet restore AgroMarketApi.csproj
 
-# Copia el resto y limpia bin/obj por si entraron
+# Copiar el resto del código (bin/obj ya están ignorados por .dockerignore)
 COPY . .
-RUN rm -rf ./bin ./obj
 
-# Publica
-RUN dotnet publish -c Release -o /app --no-restore
+# Publicar el PROYECTO explícitamente
+RUN dotnet publish AgroMarketApi.csproj -c Release -o /app --no-restore
 
 # ========= Runtime =========
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app .
 
-# Render usa $PORT
 ENV ASPNETCORE_URLS=http://0.0.0.0:${PORT}
 ENTRYPOINT ["dotnet", "AgroMarketApi.dll"]
