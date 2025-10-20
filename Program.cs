@@ -48,10 +48,23 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 
-// CORS va entre Routing y Authorization
+// ✅ Permite responder correctamente a las solicitudes OPTIONS
 app.UseCors("AgroCors");
 
+// ✅ Esto hace que responda automáticamente al preflight
+app.Use(async (context, next) =>
+{
+    if (context.Request.Method == "OPTIONS")
+    {
+        context.Response.StatusCode = 200;
+        await context.Response.CompleteAsync();
+        return;
+    }
+    await next();
+});
+
 app.UseAuthorization();
+
 
 app.MapControllers();
 
