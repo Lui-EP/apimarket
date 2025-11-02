@@ -3,12 +3,12 @@ using AgroMarketApi.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Controllers + Swagger
+// ========== Controllers + Swagger ==========
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Connection string (appsettings o DATABASE_URL en Render)
+// ========== Connection string (appsettings o DATABASE_URL en Render) ==========
 var conn = builder.Configuration.GetConnectionString("PostgreSQLConnection");
 var dbUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 if (string.IsNullOrWhiteSpace(conn) && !string.IsNullOrWhiteSpace(dbUrl))
@@ -18,54 +18,45 @@ if (string.IsNullOrWhiteSpace(conn) && !string.IsNullOrWhiteSpace(dbUrl))
     conn = $"Host={uri.Host};Port={uri.Port};Database={uri.LocalPath.TrimStart('/')};" +
            $"Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
 }
-
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(conn));
 
-// CORS (sin AllowCredentials, sin SetIsOriginAllowed)
+// ========== CORS ==========
+const string AgroCors = "AgroCors";
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AgroCors", policy =>
+    options.AddPolicy(AgroCors, policy =>
     {
         policy
+            // SOLO los orígenes que realmente llaman a la API:
             .WithOrigins(
-                "http://127.0.0.1:5500",
-                "http://localhost:5500",
-                "https://apimarket-o0wh.onrender.com"   // tu backend (útil para Swagger/try it out)
+                "https://agromarket-s920.onrender.com", // tu FRONT en Render
+                "http://localhost:5500",                // dev local
+                "http://127.0.0.1:5500"                 // dev local
             )
             .AllowAnyHeader()
             .AllowAnyMethod();
-        // Si en el futuro usas cookies/autenticación cross-site:
-        // usa .WithOrigins([...]).AllowCredentials()  <-- pero sin AllowAnyOrigin/SetIsOriginAllowed
+            // .AllowCredentials(); // solo si usas cookies/auth cross-site
     });
 });
 
 var app = builder.Build();
 
-app.UseSwagger();
-app.UseSwaggerUI();
-
-app.UseHttpsRedirection();
-
-app.UseRouting();
-
-// ✅ Permite responder correctamente a las solicitudes OPTIONS
-app.UseCors("AgroCors");
-
-// ✅ Esto hace que responda automáticamente al preflight
-app.Use(async (context, next) =>
+// (Opcional) Swagger en dev solamente:
+if (app.Environment.IsDevelopment())
 {
-    if (context.Request.Method == "OPTIONS")
-    {
-        context.Response.StatusCode = 200;
-        await context.Response.CompleteAsync();
-        return;
-    }
-    await next();
-});
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
+// ========== Pipeline (orden correcto) ==========
+app.UseRouting();
+app.UseCors(AgroCors);
 app.UseAuthorization();
 
-
+// ========== Endpoints ==========
 app.MapControllers();
+
+// Healthcheck sencillo
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
