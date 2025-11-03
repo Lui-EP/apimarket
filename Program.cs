@@ -8,12 +8,12 @@ using AgroMarketApi.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ========== Controllers + Swagger ==========
+// ===== Controllers + Swagger =====
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// ========== Connection string (appsettings o DATABASE_URL en Render) ==========
+// ===== Connection string (appsettings o DATABASE_URL en Render) =====
 var conn = builder.Configuration.GetConnectionString("PostgreSQLConnection");
 var dbUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 if (string.IsNullOrWhiteSpace(conn) && !string.IsNullOrWhiteSpace(dbUrl))
@@ -26,14 +26,15 @@ if (string.IsNullOrWhiteSpace(conn) && !string.IsNullOrWhiteSpace(dbUrl))
 }
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(conn));
 
-// ========== CORS (abierto; sin credenciales) ==========
+// ===== CORS =====
+// Nota: NO usamos credenciales/cookies; por eso AllowAnyOrigin es válido.
 const string AgroCors = "AgroCors";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(AgroCors, policy =>
     {
         policy
-            .AllowAnyOrigin()   // si NO usas cookies/autenticación de navegador
+            .AllowAnyOrigin()
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -47,58 +48,40 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// ========== Pipeline (orden correcto) ==========
+// ===== Pipeline =====
 app.UseRouting();
 
-// 0) Inyecta headers CORS también en respuestas de error (500, etc.)
+// (0) Headers CORS en TODAS las respuestas (incluye 4xx/5xx).
+//     Si el proxy de Render deja pasar la request a Kestrel, estos headers SIEMPRE saldrán.
 app.Use(async (ctx, next) =>
 {
-    ctx.Response.OnStarting(() =>
-    {
-        var origin = ctx.Request.Headers["Origin"].ToString();
-        if (!string.IsNullOrEmpty(origin))
-        {
-            if (!ctx.Response.Headers.ContainsKey("Access-Control-Allow-Origin"))
-                ctx.Response.Headers["Access-Control-Allow-Origin"] = origin;
-            if (!ctx.Response.Headers.ContainsKey("Vary"))
-                ctx.Response.Headers["Vary"] = "Origin";
-        }
-        return Task.CompletedTask;
-    });
-
+    // Inyecta desde el inicio (por si algo truena más adelante)
+    ctx.Response.Headers["Access-Control-Allow-Origin"] = "*"; // sin cookies -> *
+    ctx.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
+    ctx.Response.Headers["Access-Control-Allow-Headers"] = "*";
+    ctx.Response.Headers["Vary"] = "Origin";
     await next();
 });
 
-// 1) Preflight corto (OPTIONS) para no tocar DB/EF en preflight
+// (1) Preflight OPTIONS corto (no tocar DB/EF)
 app.Use(async (ctx, next) =>
 {
     if (string.Equals(ctx.Request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
     {
-        var origin = ctx.Request.Headers["Origin"].ToString();
-        if (!string.IsNullOrEmpty(origin))
-            ctx.Response.Headers["Access-Control-Allow-Origin"] = origin;
-
-        var reqHdrs = ctx.Request.Headers["Access-Control-Request-Headers"].ToString();
-        var reqMth = ctx.Request.Headers["Access-Control-Request-Method"].ToString();
-        if (!string.IsNullOrEmpty(reqHdrs))
-            ctx.Response.Headers["Access-Control-Allow-Headers"] = reqHdrs;
-        if (!string.IsNullOrEmpty(reqMth))
-            ctx.Response.Headers["Access-Control-Allow-Methods"] = reqMth;
-
-        ctx.Response.Headers["Vary"] = "Origin";
+        // ya pusimos los headers arriba
         ctx.Response.StatusCode = 204; // No Content
         return;
     }
     await next();
 });
 
-// 2) CORS para el resto de peticiones
+// (2) CORS normal para el resto
 app.UseCors(AgroCors);
 
-// (Opcional) app.UseHttpsRedirection();
+// (opcional) app.UseHttpsRedirection();
 app.UseAuthorization();
 
-// ========== Endpoints ==========
+// ===== Endpoints =====
 app.MapControllers();
 
 // Healthcheck simple
