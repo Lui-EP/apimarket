@@ -1,5 +1,4 @@
 using System;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,14 +7,15 @@ using AgroMarketApi.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ===== Controllers + Swagger =====
+// ========== Controllers + Swagger ==========
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// ===== Connection string (appsettings o DATABASE_URL en Render) =====
+// ========== Connection string (appsettings o DATABASE_URL en Render) ==========
 var conn = builder.Configuration.GetConnectionString("PostgreSQLConnection");
 var dbUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+
 if (string.IsNullOrWhiteSpace(conn) && !string.IsNullOrWhiteSpace(dbUrl))
 {
     var uri = new Uri(dbUrl);
@@ -24,70 +24,52 @@ if (string.IsNullOrWhiteSpace(conn) && !string.IsNullOrWhiteSpace(dbUrl))
         $"Host={uri.Host};Port={uri.Port};Database={uri.LocalPath.TrimStart('/')};" +
         $"Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
 }
+
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(conn));
 
-// ===== CORS =====
-// Nota: NO usamos credenciales/cookies; por eso AllowAnyOrigin es válido.
+// ========== CORS ==========
 const string AgroCors = "AgroCors";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(AgroCors, policy =>
     {
         policy
-            .AllowAnyOrigin()
+            // Agrega aquí todos los orígenes de tu front (dev y prod)
+            .WithOrigins(
+                "http://127.0.0.1:5500",
+                "http://localhost:5500"
+                // ,"https://tu-front.prod.com"
+            )
             .AllowAnyHeader()
             .AllowAnyMethod();
+        // Si usaras cookies/tokens con credenciales, agrega: .AllowCredentials();
     });
 });
 
 var app = builder.Build();
 
+// ========== Swagger solo en Development ==========
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// ===== Pipeline =====
+// ========== Orden de middlewares ==========
 app.UseRouting();
-// en Program.cs, después de app.UseRouting();
-app.UseStaticFiles();      // sirve /wwwroot
 
-// (opcional) SPA fallback
-app.MapFallbackToFile("index.html");
+// Respuesta universal a PRE-FLIGHT (OPTIONS) con CORS sin tocar DB
+app.MapMethods("{*path}", new[] { "OPTIONS" }, () => Results.NoContent())
+   .RequireCors(AgroCors);
 
-// (0) Headers CORS en TODAS las respuestas (incluye 4xx/5xx).
-//     Si el proxy de Render deja pasar la request a Kestrel, estos headers SIEMPRE saldrán.
-app.Use(async (ctx, next) =>
-{
-    // Inyecta desde el inicio (por si algo truena más adelante)
-    ctx.Response.Headers["Access-Control-Allow-Origin"] = "*"; // sin cookies -> *
-    ctx.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS";
-    ctx.Response.Headers["Access-Control-Allow-Headers"] = "*";
-    ctx.Response.Headers["Vary"] = "Origin";
-    await next();
-});
-
-// (1) Preflight OPTIONS corto (no tocar DB/EF)
-app.Use(async (ctx, next) =>
-{
-    if (string.Equals(ctx.Request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
-    {
-        // ya pusimos los headers arriba
-        ctx.Response.StatusCode = 204; // No Content
-        return;
-    }
-    await next();
-});
-
-// (2) CORS normal para el resto
+// Aplica CORS ANTES de exponer los endpoints
 app.UseCors(AgroCors);
 
 // (opcional) app.UseHttpsRedirection();
 app.UseAuthorization();
 
-// ===== Endpoints =====
-app.MapControllers();
+// ========== Endpoints ==========
+app.MapControllers().RequireCors(AgroCors);
 
 // Healthcheck simple
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
