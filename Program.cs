@@ -7,12 +7,16 @@ using AgroMarketApi.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ========= Controllers + Swagger =========
+// ===== Logging un poco más verboso en Prod =====
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+
+// ===== Controllers + Swagger =====
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// ========= DB (appsettings o DATABASE_URL en Render) =========
+// ===== DB (appsettings o DATABASE_URL en Render) =====
 var conn = builder.Configuration.GetConnectionString("PostgreSQLConnection");
 var dbUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 if (string.IsNullOrWhiteSpace(conn) && !string.IsNullOrWhiteSpace(dbUrl))
@@ -23,49 +27,78 @@ if (string.IsNullOrWhiteSpace(conn) && !string.IsNullOrWhiteSpace(dbUrl))
         $"Host={uri.Host};Port={uri.Port};Database={uri.LocalPath.TrimStart('/')};" +
         $"Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
 }
-builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(conn));
 
-// ========= CORS (modo amplio para pruebas) =========
+builder.Services.AddDbContext<AppDbContext>(opt =>
+{
+    opt.UseNpgsql(conn, o =>
+    {
+        o.CommandTimeout(15); // que truene rápido si la DB no responde
+    });
+
+    // útil para rastrear problemas en Prod temporalmente:
+    opt.EnableDetailedErrors();
+    opt.EnableSensitiveDataLogging();
+});
+
+// ===== CORS ultra permisivo para DEV (luego lo cerramos) =====
 const string AgroCors = "AgroCors";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(AgroCors, policy =>
     {
         policy
-            .AllowAnyOrigin()   // <- para DEV. (en prod cambia a WithOrigins(...))
+            .AllowAnyOrigin()
             .AllowAnyHeader()
             .AllowAnyMethod();
-        // Nota: si usas cookies/tokens con credenciales, NO puedes usar AllowAnyOrigin.
-        // En ese caso: .WithOrigins("http://127.0.0.1:5500","http://localhost:5500").AllowCredentials();
     });
 });
 
 var app = builder.Build();
 
-// ========= Swagger en Development =========
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// ========= Orden de middlewares =========
+// ===== Middleware para medir latencia y ver si llegamos al controlador =====
+app.Use(async (ctx, next) =>
+{
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    try
+    {
+        await next();
+    }
+    finally
+    {
+        sw.Stop();
+        app.Logger.LogInformation("HTTP {Method} {Path} -> {StatusCode} en {Elapsed}ms",
+            ctx.Request.Method, ctx.Request.Path, ctx.Response?.StatusCode, sw.ElapsedMilliseconds);
+    }
+});
+
+// ===== Orden correcto =====
 app.UseRouting();
 
-// Respuesta universal a PRE-FLIGHT (OPTIONS) con CORS, sin tocar DB
+// Respuesta universal a OPTIONS (preflight) con CORS
 app.MapMethods("{*path}", new[] { "OPTIONS" }, () => Results.NoContent())
    .RequireCors(AgroCors);
 
-// Aplica CORS ANTES de exponer los endpoints
+// Aplica CORS ANTES de exponer endpoints
 app.UseCors(AgroCors);
 
-// (opcional) app.UseHttpsRedirection();
 app.UseAuthorization();
 
-// ========= Endpoints =========
+// ===== Endpoints =====
 app.MapControllers().RequireCors(AgroCors);
 
-// Healthcheck
+// Healthcheck y debug
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/debug/ping", () => Results.Ok(new { ping = DateTime.UtcNow }));
+app.MapGet("/debug/db", async (AppDbContext db) =>
+{
+    var ok = await db.Database.CanConnectAsync();
+    return Results.Ok(new { db = ok ? "ok" : "fail" });
+});
 
 app.Run();
