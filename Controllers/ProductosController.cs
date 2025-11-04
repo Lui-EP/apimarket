@@ -50,14 +50,34 @@ public class ProductosController(AppDbContext db) : ControllerBase
     }
 
     // PUT: /api/productos/5
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, Producto input)
-    {
-        if (id != input.Id) return BadRequest("El id del cuerpo no coincide con la ruta.");
-        db.Entry(input).State = EntityState.Modified;
-        await db.SaveChangesAsync();
-        return NoContent();
-    }
+[HttpPut("{id:int}")]
+public async Task<IActionResult> Update(int id, [FromBody] Producto input)
+{
+    if (input is null) return BadRequest("Body vacío.");
+    if (id != input.Id) return BadRequest("El id del cuerpo no coincide con la ruta.");
+
+    var entity = await db.Productos.FirstOrDefaultAsync(p => p.Id == id);
+    if (entity is null) return NotFound($"Producto {id} no existe.");
+
+    // Fecha defensiva: si te llega default, conserva la que ya tenía o pon ahora mismo.
+    var fecha = (input.FechaPublicacion == default)
+        ? (entity.FechaPublicacion == default ? DateTime.UtcNow : entity.FechaPublicacion)
+        : input.FechaPublicacion;
+
+    // Mapear solo campos simples
+    entity.ProductorId      = input.ProductorId;
+    entity.Nombre           = input.Nombre?.Trim() ?? "";
+    entity.Precio           = input.Precio;
+    entity.Volumen          = input.Volumen;
+    entity.Ubicacion        = input.Ubicacion;
+    entity.Descripcion      = input.Descripcion;
+    entity.Activo           = input.Activo;
+    entity.FechaPublicacion = fecha;
+
+    await db.SaveChangesAsync();
+    return NoContent(); // 204
+}
+
 
     // DELETE: /api/productos/5
     [HttpDelete("{id:int}")]
