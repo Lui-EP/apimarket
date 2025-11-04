@@ -50,6 +50,11 @@ if (app.Environment.IsDevelopment())
 
 // ===== Pipeline =====
 app.UseRouting();
+// en Program.cs, después de app.UseRouting();
+app.UseStaticFiles();      // sirve /wwwroot
+
+// (opcional) SPA fallback
+app.MapFallbackToFile("index.html");
 
 // (0) Headers CORS en TODAS las respuestas (incluye 4xx/5xx).
 //     Si el proxy de Render deja pasar la request a Kestrel, estos headers SIEMPRE saldrán.
